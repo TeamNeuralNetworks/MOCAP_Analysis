@@ -100,19 +100,19 @@ function createSubplots(predictors, good_plus, good_minus, observations, subset,
     % - Subplot 313: Shows the firing rate for negative predictors
     
     % Subplot 311
-    subplot(311); 
+    ax1 = subplot(311); 
     plot(mean(predictors(:, good_plus), 2), 'g'); 
     set(gca, 'box', 'off'); 
     ylabel('F. rate  (+ \beta)');  % Explanatory comment
     
     % Subplot 312
-    subplot(312); 
+    ax2 = subplot(312); 
     plot(normalize(observations(:, subset(beh_idx))), 'k'); 
     set(gca, 'box', 'off'); 
     ylabel('behaviour');            % Explanatory comment
     
     % Subplot 313
-    subplot(313); 
+    ax3 = subplot(313); 
     plot(mean(predictors(:, good_minus), 2), 'r'); hold on; 
     set(gca, 'box', 'off'); 
     ylabel('F. rate  (- \beta)'); 
@@ -120,4 +120,6 @@ function createSubplots(predictors, good_plus, good_minus, observations, subset,
     
     % Set global title
     sgtitle(tit);
+    
+    linkaxes([ax1, ax2, ax3], 'x');
 end

@@ -65,7 +65,7 @@
 %       options for plotting styles.
 
 
-function reference_phase = get_step_cycle_phase_ref(observations, predictors, observation_labels, phase_ref)
+function [reference_phase, time_norm] = get_step_cycle_phase_ref(observations, predictors, observation_labels, phase_ref)
     
     %% Check for input arguments and set default phase reference
     if nargin < 4 || isempty(phase_ref)
@@ -76,7 +76,7 @@ function reference_phase = get_step_cycle_phase_ref(observations, predictors, ob
     phase_ref_idx = find(contains(observation_labels, phase_ref)) ;
 
     %% Compute and plot phase of response
-    [~, ~, reference_phase] = plot_phase_of_reponse(observations(:, phase_ref_idx), ...
+    [~, ~, reference_phase, ~, time_norm] = plot_phase_of_reponse(observations(:, phase_ref_idx), ...
                                                     predictors(:, 1), '', false) ;
     figure(658) ;  % Initialize the figure
     clf()       ;  % Clear the figure
