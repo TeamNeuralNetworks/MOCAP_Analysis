@@ -82,33 +82,94 @@
 % 	20-09-202
 
 
-function [mean_angle_unweighted_deg, mean_magnitude, beh_phase, n_events] = plot_phase_of_reponse(obs, pred, title_label, rendering, ref_phase, time)
+function [mean_angle_unweighted_deg, mean_magnitude, beh_phase, n_events, time_norm] = plot_phase_of_reponse(obs, pred, title_label, rendering, ref_phase, time, time_norm)
     % Initialize defaults
     if nargin < 6 || isempty(time)
         time = 1:numel(obs);
-    end
+    end    
     n_events = [];
+    
 
-    % Compute the analytic signal and phase
-    analyticSignal = hilbert(obs);
+    % Compute the analytic signal and phase    
     if nargin < 5 || isempty(ref_phase)
-        beh_phase                   = angle(analyticSignal);
+
+        %         analyticSignal              = hilbert(obs);
+        %         beh_phase                   = angle(analyticSignal);
+        % Initialize peaks and valleys
+        peaks_and_valleys = {};
+        [~, peaks_and_valleys{1}] = findpeaks(obs, 'MinPeakProminence', 10);
+        [~, peaks_and_valleys{2}] = findpeaks(-obs, 'MinPeakProminence', 10);
+
+        % Combine and sort peaks and valleys
+        [m, firstIndex] = min([peaks_and_valleys{1}(1), peaks_and_valleys{2}(1)]);
+        order = [1, 2]; % Assume peaks then valleys by default
+        if firstIndex == 2
+            order = [2, 1]; % Valleys then peaks
+        end
+
+        combined_locs = sort([peaks_and_valleys{order(1)}; peaks_and_valleys{order(2)}]);
+
+        % Check for missing steps
+        for i = 1:length(combined_locs)-1
+            currentType = ismember(combined_locs(i), peaks_and_valleys{order(1)});
+            nextType = ismember(combined_locs(i+1), peaks_and_valleys{order(1)});
+
+            if currentType == nextType
+                warning('Missing step detected near index %d', combined_locs(i));
+            end
+        end
+
+        % Initialize phase array
+        beh_phase = zeros(size(obs));
+
+        % Process each segment
+        for i = 1:length(combined_locs) - 1
+            start_idx = combined_locs(i);
+            end_idx = combined_locs(i + 1);
+
+            % Extract the data segment
+            data_segment = obs(start_idx:end_idx);
+
+            % Normalize data segment to [0, 1]
+            normalized_data_segment = (data_segment - min(data_segment)) / range(data_segment);
+
+            % Determine if the segment is valley-to-peak or peak-to-valley
+            isValleyToPeak = ismember(start_idx, peaks_and_valleys{2});
+
+            if isValleyToPeak
+                % Valley to peak: Map normalized data to phase range 0 to π
+                beh_phase(start_idx:end_idx) = normalized_data_segment * pi;
+            else
+                % Peak to valley: Map normalized data to phase range -π to 0
+                beh_phase(start_idx:end_idx) = normalized_data_segment * -pi;
+            end
+        end
+
+
+        f                           = figure();
+        href                        = polarhistogram(beh_phase, 18, 'Normalization', 'probability');
+        time_norm                   = href.Values;close(f);
         mean_angle_unweighted_deg   = [];
-        mean_magnitude                 = [];
+        mean_magnitude              = [];
         return;
     else
         beh_phase = ref_phase;
     end
 
+    if nargin < 7 || isempty(time_norm)
+        time_norm = ones(1,18);
+    end
+    
     angles = rad2deg(beh_phase);
     
     if all(sign(diff(pred(~isnan(pred)))) >= 0)
-        [mean_magnitude, mean_angle, n_events] = processSpikeTimes(pred, beh_phase, time, title_label, rendering);
+        
+        [mean_magnitude, mean_angle, n_events] = processSpikeTimes(pred, beh_phase, time, title_label, rendering, time_norm);
+        mean_angle_unweighted_deg = rad2deg(mean_angle) %calculateMeanAngle(angles, pred);
     else
         mean_magnitude = processSignalPeaks(pred, angles, title_label, rendering);
+        mean_angle_unweighted_deg = calculateMeanAngle(angles, pred);
     end
-
-    mean_angle_unweighted_deg = calculateMeanAngle(angles, pred);
 end
 
 % Calculate mean angle
@@ -119,14 +180,14 @@ function mean_angle_unweighted_deg = calculateMeanAngle(angles, pred)
 end
 
 % Process spike times and plot the polar histogram
-function [mean_magnitude, mean_angle, n_events] = processSpikeTimes(pred, ref_phase, time, title_label, rendering)
+function [mean_magnitude, mean_angle, n_events] = processSpikeTimes(pred, ref_phase, time, title_label, rendering, norm)
     spike_times         = pred(1:find(~isnan(pred), 1, 'last'));
     nearest_indices     = nearestIndices(time, spike_times);
     n_events            = numel(nearest_indices);
     spike_phases        = ref_phase(nearest_indices);
 
     if rendering
-        [mean_magnitude, mean_angle] = plotPolarHistogram(spike_phases, title_label);
+        [mean_magnitude, mean_angle] = plotPolarHistogram(spike_phases, title_label, norm);
     end
 end
 
@@ -151,12 +212,15 @@ function nearest_indices = nearestIndices(time, spike_times)
 end
 
 % Create polar histogram and calculate mean length
-function [mean_magnitude, mean_angle] = plotPolarHistogram(spike_phases, title_label)
+function [mean_magnitude, mean_angle] = plotPolarHistogram(spike_phases, title_label, norm)
     figure(667);clf();
     num_bins = 18;
 
     % Plot the polar histogram
     h = polarhistogram(spike_phases, num_bins, 'Normalization', 'probability');
+    counts = h.Values ./ norm;
+    edges = h.BinEdges;cla
+    h = polarhistogram('BinEdges',edges,'BinCounts',counts);
     title(['Spike times as a function of Reference Phase, ', title_label]);
     
     hold on;  % Hold the current plot
